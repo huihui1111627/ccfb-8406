@@ -1,0 +1,4 @@
+lis-hub
+lis.db*
+server.log
+testdata/

@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>检验数据集成平台</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; margin: 0; background: #f0f2f5; color: #222; }
+  header { background: #0d3b66; color: #fff; padding: 10px 20px; display: flex; align-items: center; gap: 20px; }
+  header h1 { font-size: 17px; margin: 0; }
+  nav { display: flex; gap: 4px; }
+  nav button { background: transparent; color: #cfe0f0; border: none; padding: 8px 14px; cursor: pointer; font-size: 14px; border-radius: 4px; }
+  nav button.active { background: #1a5a9e; color: #fff; }
+  main { padding: 16px 20px; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+  table { border-collapse: collapse; width: 100%; background: #fff; font-size: 13px; }
+  th, td { border: 1px solid #e3e6ea; padding: 6px 8px; text-align: left; }
+  th { background: #f7f9fb; }
+  tr:hover td { background: #f5f9ff; }
+  .card { background: #fff; border: 1px solid #e3e6ea; border-radius: 6px; padding: 14px; margin-bottom: 14px; }
+  input, select, textarea { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+  button.btn { background: #1a5a9e; color: #fff; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+  button.btn.sm { padding: 2px 8px; font-size: 12px; }
+  button.btn.gray { background: #8a94a0; }
+  button.btn.red { background: #c0392b; }
+  .flag-H, .flag-HH { color: #d35400; font-weight: bold; }
+  .flag-L, .flag-LL { color: #2980b9; font-weight: bold; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 12px; }
+  .badge.ok { background: #e6f7e6; color: #27ae60; }
+  .badge.partial { background: #fdf3e0; color: #d35400; }
+  .badge.failed { background: #fdeaea; color: #c0392b; }
+  .badge.open { background: #fdeaea; color: #c0392b; }
+  .badge.ack { background: #fdf3e0; color: #d35400; }
+  .badge.closed { background: #e6f7e6; color: #27ae60; }
+  .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+  .split { display: flex; gap: 14px; }
+  .split > div { flex: 1; min-width: 0; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .viol { color: #c0392b; font-weight: bold; }
+  .muted { color: #888; font-size: 12px; }
+  h3 { margin: 0 0 10px; font-size: 15px; }
+  #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 10; }
+  #modal .box { background: #fff; margin: 4vh auto; max-width: 1100px; max-height: 90vh; overflow: auto; border-radius: 8px; padding: 18px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>检验数据集成平台</h1>
+  <nav id="nav">
+    <button data-tab="messages" class="active">接口接入</button>
+    <button data-tab="mappings">项目映射</button>
+    <button data-tab="results">结果查询</button>
+    <button data-tab="critical">危急值</button>
+    <button data-tab="qc">质控</button>
+    <button data-tab="stats">TAT统计</button>
+  </nav>
+</header>
+<main>
+
+<!-- ============ 接口接入 ============ -->
+<div class="tab active" id="tab-messages">
+  <div class="card">
+    <h3>手动接入测试</h3>
+    <div class="toolbar">
+      <select id="ingest-protocol"><option value="hl7">HL7 v2</option><option value="astm">ASTM</option></select>
+      <input id="ingest-source" placeholder="来源标识(如 AU5800)" style="width:180px">
+      <button class="btn" onclick="ingestText()">发送</button>
+      <span class="muted">或上传 Excel: </span>
+      <input type="file" id="excel-file" accept=".xlsx">
+      <input id="excel-source" placeholder="来源(如 HOSP-A)" style="width:120px">
+      <button class="btn" onclick="uploadExcel()">导入Excel</button>
+    </div>
+    <textarea id="ingest-text" rows="5" style="width:100%" placeholder="粘贴 HL7 / ASTM 报文(可含乱码、截断内容, 平台容错解析)"></textarea>
+    <div id="ingest-result" class="muted" style="margin-top:6px"></div>
+  </div>
+  <div class="card">
+    <h3>原始报文 <button class="btn sm gray" onclick="loadMessages()">刷新</button></h3>
+    <table id="messages-table">
+      <thead><tr><th>ID</th><th>接收时间</th><th>来源</th><th>协议</th><th>编码</th><th>解析状态</th><th>结果数</th><th>解析信息</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============ 项目映射 ============ -->
+<div class="tab" id="tab-mappings">
+  <div class="card">
+    <h3>标准项目与参考范围</h3>
+    <div class="toolbar">
+      <input id="a-code" placeholder="标准编码" style="width:90px">
+      <input id="a-name" placeholder="项目名称" style="width:130px">
+      <input id="a-unit" placeholder="标准单位" style="width:90px">
+      <button class="btn sm" onclick="addAnalyte()">添加项目</button>
+    </div>
+    <table id="analytes-table"><thead><tr><th>ID</th><th>编码</th><th>名称</th><th>标准单位</th><th>参考范围(性别/年龄)</th></tr></thead><tbody></tbody></table>
+  </div>
+  <div class="card">
+    <h3>项目映射 <span class="muted">未映射的项目会在收到报文时自动登记在此</span></h3>
+    <table id="mappings-table">
+      <thead><tr><th>ID</th><th>来源</th><th>对方代码</th><th>对方名称</th><th>对方单位</th><th>标准项目</th><th>换算系数</th><th>偏移</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============ 结果查询 ============ -->
+<div class="tab" id="tab-results">
+  <div class="card">
+    <div class="toolbar">
+      <input id="q-sample" placeholder="样本号">
+      <input id="q-patient" placeholder="病人ID/姓名">
+      <input id="q-analyte" placeholder="项目(编码/名称)">
+      <label class="muted"><input type="checkbox" id="q-all"> 含历史版本</label>
+      <button class="btn" onclick="loadResults()">查询</button>
+    </div>
+    <table id="results-table">
+      <thead><tr><th>ID</th><th>样本号</th><th>病人</th><th>项目</th><th>结果</th><th>单位</th><th>参考范围</th><th>标记</th><th>状态</th><th>版本</th><th>检测时间</th><th>来源</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============ 危急值 ============ -->
+<div class="tab" id="tab-critical">
+  <div class="card">
+    <h3>危急值事件 <span class="muted">open → 确认(ack) → 关闭(closed) 闭环</span>
+      <select id="crit-status" onchange="loadCritical()">
+        <option value="">全部</option><option value="open">未处理</option><option value="ack">已确认</option><option value="closed">已关闭</option>
+      </select>
+    </h3>
+    <table id="critical-table">
+      <thead><tr><th>ID</th><th>时间</th><th>样本号</th><th>病人</th><th>项目</th><th>结果</th><th>级别</th><th>状态</th><th>确认人</th><th>关闭人</th><th>备注</th><th>操作</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h3>危急值规则</h3>
+    <table id="crit-rules-table"><thead><tr><th>项目ID</th><th>性别</th><th>年龄范围</th><th>低限</th><th>高限</th></tr></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<!-- ============ 质控 ============ -->
+<div class="tab" id="tab-qc">
+  <div class="card">
+    <h3>质控批设置</h3>
+    <div class="toolbar">
+      <input id="qc-source" placeholder="来源" style="width:100px">
+      <select id="qc-analyte"></select>
+      <input id="qc-lot" placeholder="批号" style="width:90px">
+      <input id="qc-level" placeholder="水平(L1)" style="width:70px">
+      <input id="qc-mean" placeholder="靶值" style="width:70px">
+      <input id="qc-sd" placeholder="SD" style="width:60px">
+      <button class="btn sm" onclick="addQCLot()">添加</button>
+    </div>
+    <table id="qc-lots-table"><thead><tr><th>ID</th><th>来源</th><th>项目</th><th>批号</th><th>水平</th><th>靶值</th><th>SD</th></tr></thead><tbody></tbody></table>
+  </div>
+  <div class="card">
+    <h3>质控结果 (Westgard 多规则)</h3>
+    <table id="qc-table">
+      <thead><tr><th>ID</th><th>时间</th><th>项目</th><th>批号</th><th>水平</th><th>值</th><th>Z</th><th>违反规则</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============ TAT统计 ============ -->
+<div class="tab" id="tab-stats">
+  <div class="card">
+    <h3>周转时间(TAT)统计 — 按仪器/项目 <button class="btn sm gray" onclick="loadTAT()">刷新</button></h3>
+    <table id="tat-table">
+      <thead><tr><th>来源</th><th>项目</th><th>样本数</th><th>平均(分钟)</th><th>P50</th><th>P90</th><th>最大</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+</main>
+
+<!-- 报文对照弹窗 -->
+<div id="modal"><div class="box">
+  <button class="btn sm gray" style="float:right" onclick="document.getElementById('modal').style.display='none'">关闭</button>
+  <div id="modal-content"></div>
+</div></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const api = async (url, opts) => {
+  const r = await fetch(url, opts);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+};
+const fmtT = t => t ? String(t).replace('T',' ').slice(0,19) : '';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+document.querySelectorAll('#nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#nav button').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  $('tab-' + b.dataset.tab).classList.add('active');
+  loadTab(b.dataset.tab);
+});
+
+function loadTab(t) {
+  ({messages: loadMessages, mappings: loadMappings, results: loadResults,
+    critical: loadCritical, qc: loadQC, stats: loadTAT})[t]();
+}
+
+// ---------- 接口接入 ----------
+async function ingestText() {
+  const text = $('ingest-text').value;
+  if (!text) return alert('请粘贴报文');
+  try {
+    const j = await api(`/api/ingest?protocol=${$('ingest-protocol').value}&source=${encodeURIComponent($('ingest-source').value)}`,
+      {method: 'POST', body: text});
+    $('ingest-result').textContent = `报文#${j.raw_message_id}: ` +
+      j.outcomes.map(o => `${o.action}${o.warning ? '(' + o.warning + ')' : ''}`).join(', ');
+    loadMessages();
+  } catch (e) { $('ingest-result').textContent = '失败: ' + e.message; }
+}
+
+async function uploadExcel() {
+  const f = $('excel-file').files[0];
+  if (!f) return alert('请选择xlsx文件');
+  const fd = new FormData();
+  fd.append('file', f);
+  try {
+    const j = await api(`/api/import/excel?source=${encodeURIComponent($('excel-source').value || 'excel')}`,
+      {method: 'POST', body: fd});
+    $('ingest-result').textContent = `Excel导入 报文#${j.raw_message_id}: ` +
+      j.outcomes.map(o => o.action).join(', ') + (j.warnings?.length ? ' 警告: ' + j.warnings.join('; ') : '');
+    loadMessages();
+  } catch (e) { $('ingest-result').textContent = '失败: ' + e.message; }
+}
+
+async function loadMessages() {
+  const ms = await api('/api/messages?limit=100');
+  $('messages-table').querySelector('tbody').innerHTML = ms.map(m => `<tr>
+    <td>${m.id}</td><td>${fmtT(m.received_at)}</td><td>${esc(m.source)}</td><td>${m.protocol}</td>
+    <td>${esc(m.encoding)}</td><td><span class="badge ${m.parse_status}">${m.parse_status}</span></td>
+    <td>${m.result_count}</td><td class="muted">${esc(m.parse_error)}</td>
+    <td><button class="btn sm" onclick="showMessage(${m.id})">对照</button></td></tr>`).join('');
+}
+
+async function showMessage(id) {
+  const j = await api('/api/messages/' + id);
+  const m = j.message, rs = j.results || [];
+  $('modal-content').innerHTML = `
+    <h3>报文 #${m.id} — 原始报文 / 标准化结果对照</h3>
+    <div class="split">
+      <div><h3>原始报文 (${esc(m.protocol)}, ${esc(m.encoding)})</h3>
+        <div class="card mono" style="max-height:60vh;overflow:auto">${esc(m.content)}</div></div>
+      <div><h3>标准化结果 (${rs.length})</h3>
+        <table><thead><tr><th>项目</th><th>原始值</th><th>原始单位</th><th>标准值</th><th>标准单位</th><th>标记</th><th>状态</th></tr></thead>
+        <tbody>${rs.map(r => `<tr>
+          <td>${esc(r.analyte_name || r.source_name || r.source_code)}</td>
+          <td>${esc(r.raw_value)}</td><td>${esc(r.raw_unit)}</td>
+          <td>${r.value ?? ''}</td><td>${esc(r.unit)}</td>
+          <td class="flag-${esc(r.flag)}">${esc(r.flag)}</td><td>${esc(r.status)} v${r.version}</td>
+        </tr>`).join('')}</tbody></table></div>
+    </div>`;
+  $('modal').style.display = 'block';
+}
+
+// ---------- 项目映射 ----------
+let analytesCache = [];
+async function loadMappings() {
+  analytesCache = await api('/api/analytes');
+  const ranges = await api('/api/refranges');
+  $('analytes-table').querySelector('tbody').innerHTML = analytesCache.map(a => {
+    const rr = ranges.filter(r => r.analyte_id === a.id)
+      .map(r => `${r.sex || '不限'} ${r.age_min}-${r.age_max}岁: ${r.low}~${r.high}`).join('<br>');
+    return `<tr><td>${a.id}</td><td>${esc(a.code)}</td><td>${esc(a.name)}</td><td>${esc(a.canonical_unit)}</td><td class="muted">${rr}</td></tr>`;
+  }).join('');
+  const ms = await api('/api/mappings');
+  const opts = `<option value="">—未映射—</option>` + analytesCache.map(a => `<option value="${a.id}">${esc(a.code)} ${esc(a.name)}</option>`).join('');
+  $('mappings-table').querySelector('tbody').innerHTML = ms.map(m => `<tr data-id="${m.id}">
+    <td>${m.id}</td>
+    <td><input value="${esc(m.source)}" data-f="source" style="width:90px"></td>
+    <td><input value="${esc(m.source_code)}" data-f="source_code" style="width:90px"></td>
+    <td><input value="${esc(m.source_name)}" data-f="source_name" style="width:100px"></td>
+    <td><input value="${esc(m.source_unit)}" data-f="source_unit" style="width:80px"></td>
+    <td><select data-f="analyte_id">${opts}</select></td>
+    <td><input value="${m.factor}" data-f="factor" style="width:70px"></td>
+    <td><input value="${m.offset}" data-f="offset" style="width:60px"></td>
+    <td><button class="btn sm" onclick="saveMapping(this)">保存</button>
+        <button class="btn sm red" onclick="delMapping(${m.id})">删</button></td></tr>`).join('');
+  ms.forEach(m => {
+    const tr = document.querySelector(`tr[data-id="${m.id}"]`);
+    if (tr && m.analyte_id) tr.querySelector('[data-f=analyte_id]').value = m.analyte_id;
+  });
+  // 新增行
+  $('mappings-table').querySelector('tbody').insertAdjacentHTML('beforeend', `<tr data-id="0">
+    <td>新</td><td><input data-f="source" style="width:90px"></td><td><input data-f="source_code" style="width:90px"></td>
+    <td><input data-f="source_name" style="width:100px"></td><td><input data-f="source_unit" style="width:80px"></td>
+    <td><select data-f="analyte_id">${opts}</select></td><td><input data-f="factor" value="1" style="width:70px"></td>
+    <td><input data-f="offset" value="0" style="width:60px"></td>
+    <td><button class="btn sm" onclick="saveMapping(this)">保存</button></td></tr>`);
+}
+
+async function saveMapping(btn) {
+  const tr = btn.closest('tr');
+  const g = f => tr.querySelector(`[data-f=${f}]`).value;
+  const aid = g('analyte_id');
+  await api('/api/mappings', {method: 'POST', body: JSON.stringify({
+    id: +tr.dataset.id, source: g('source'), source_code: g('source_code'),
+    source_name: g('source_name'), source_unit: g('source_unit'),
+    analyte_id: aid ? +aid : null, factor: +g('factor') || 1, offset: +g('offset') || 0})});
+  loadMappings();
+}
+
+async function delMapping(id) {
+  if (!confirm('删除该映射?')) return;
+  await api('/api/mappings/' + id, {method: 'DELETE'});
+  loadMappings();
+}
+
+async function addAnalyte() {
+  await api('/api/analytes', {method: 'POST', body: JSON.stringify({
+    code: $('a-code').value, name: $('a-name').value, canonical_unit: $('a-unit').value})});
+  loadMappings();
+}
+
+// ---------- 结果查询 ----------
+async function loadResults() {
+  const p = new URLSearchParams();
+  if ($('q-sample').value) p.set('sample_id', $('q-sample').value);
+  if ($('q-patient').value) p.set('patient', $('q-patient').value);
+  if ($('q-analyte').value) p.set('analyte', $('q-analyte').value);
+  if ($('q-all').checked) p.set('all', '1');
+  const rs = await api('/api/results?' + p);
+  $('results-table').querySelector('tbody').innerHTML = (rs || []).map(r => `<tr style="${r.is_current ? '' : 'opacity:.55'}">
+    <td>${r.id}</td><td>${esc(r.sample_id)}</td>
+    <td>${esc(r.patient_name)} ${esc(r.patient_sex)} ${r.patient_age || ''}</td>
+    <td>${esc(r.analyte_name || r.source_name || r.source_code)}${r.analyte_id ? '' : ' <span class="badge failed">未映射</span>'}</td>
+    <td>${r.value ?? esc(r.raw_value)}${r.raw_unit !== r.unit ? ` <span class="muted">(原:${esc(r.raw_value)} ${esc(r.raw_unit)})</span>` : ''}</td>
+    <td>${esc(r.unit)}</td>
+    <td class="muted">${r.ref_low ?? ''}~${r.ref_high ?? ''}</td>
+    <td class="flag-${esc(r.flag)}">${esc(r.flag)}</td>
+    <td>${esc(r.status)}</td><td>v${r.version}</td>
+    <td>${fmtT(r.test_time)}</td><td>${esc(r.source)}</td>
+    <td><button class="btn sm gray" onclick="showMessage(${r.raw_message_id})">报文</button>
+        <button class="btn sm gray" onclick="showHistory(${r.id})">历史</button></td></tr>`).join('');
+}
+
+async function showHistory(id) {
+  const hs = await api(`/api/results/${id}/history`);
+  $('modal-content').innerHTML = `<h3>结果 #${id} 更正历史</h3>
+    <table><thead><tr><th>版本</th><th>原始值</th><th>标准值</th><th>单位</th><th>状态</th><th>当前</th><th>接收时间</th><th>报文</th></tr></thead>
+    <tbody>${hs.map(h => `<tr>
+      <td>v${h.version}</td><td>${esc(h.raw_value)} ${esc(h.raw_unit)}</td><td>${h.value ?? ''}</td><td>${esc(h.unit)}</td>
+      <td>${esc(h.status)}</td><td>${h.is_current ? '✔' : ''}</td><td>${fmtT(h.received_at)}</td>
+      <td><button class="btn sm gray" onclick="showMessage(${h.raw_message_id})">#${h.raw_message_id}</button></td>
+    </tr>`).join('')}</tbody></table>`;
+  $('modal').style.display = 'block';
+}
+
+// ---------- 危急值 ----------
+async function loadCritical() {
+  const es = await api('/api/critical?status=' + $('crit-status').value);
+  $('critical-table').querySelector('tbody').innerHTML = (es || []).map(e => `<tr>
+    <td>${e.id}</td><td>${fmtT(e.created_at)}</td><td>${esc(e.sample_id)}</td><td>${esc(e.patient_name)}</td>
+    <td>${esc(e.analyte_name)}</td>
+    <td class="viol">${e.value ?? ''} ${esc(e.unit)}</td>
+    <td>${e.level === 'low' ? '↓低' : '↑高'}</td>
+    <td><span class="badge ${e.status}">${e.status}</span></td>
+    <td>${esc(e.ack_by)}</td><td>${esc(e.closed_by)}</td><td class="muted">${esc(e.note)}</td>
+    <td>${e.status === 'open' ? `<button class="btn sm" onclick="ackCrit(${e.id})">确认</button>` : ''}
+        ${e.status !== 'closed' ? `<button class="btn sm gray" onclick="closeCrit(${e.id})">关闭</button>` : ''}</td></tr>`).join('');
+  const rules = await api('/api/critical/rules');
+  $('crit-rules-table').querySelector('tbody').innerHTML = (rules || []).map(r =>
+    `<tr><td>${r.analyte_id}</td><td>${esc(r.sex) || '不限'}</td><td>${r.age_min}-${r.age_max}</td>
+     <td>${r.low ?? ''}</td><td>${r.high ?? ''}</td></tr>`).join('');
+}
+
+async function ackCrit(id) {
+  const by = prompt('确认人:'); if (by === null) return;
+  const note = prompt('处理备注(已通知临床等):') || '';
+  await api(`/api/critical/${id}/ack`, {method: 'POST', body: JSON.stringify({by, note})});
+  loadCritical();
+}
+async function closeCrit(id) {
+  const by = prompt('关闭人:'); if (by === null) return;
+  const note = prompt('关闭备注:') || '';
+  await api(`/api/critical/${id}/close`, {method: 'POST', body: JSON.stringify({by, note})});
+  loadCritical();
+}
+
+// ---------- 质控 ----------
+async function loadQC() {
+  if (!analytesCache.length) analytesCache = await api('/api/analytes');
+  $('qc-analyte').innerHTML = analytesCache.map(a => `<option value="${a.id}">${esc(a.code)} ${esc(a.name)}</option>`).join('');
+  const lots = await api('/api/qc/lots');
+  $('qc-lots-table').querySelector('tbody').innerHTML = (lots || []).map(l =>
+    `<tr><td>${l.id}</td><td>${esc(l.source)}</td><td>${esc(l.analyte_name)}</td><td>${esc(l.lot)}</td>
+     <td>${esc(l.level)}</td><td>${l.mean}</td><td>${l.sd}</td></tr>`).join('');
+  const qs = await api('/api/qc/results?limit=200');
+  $('qc-table').querySelector('tbody').innerHTML = (qs || []).map(q => `<tr>
+    <td>${q.id}</td><td>${fmtT(q.run_at)}</td><td>${esc(q.analyte_name)}</td><td>${esc(q.lot)}</td><td>${esc(q.level)}</td>
+    <td>${q.value}</td><td>${q.z.toFixed(2)}</td>
+    <td class="${(q.violations || []).length ? 'viol' : ''}">${(q.violations || []).join(', ')}</td>
+    <td><button class="btn sm gray" onclick="ljChart(${q.qc_lot_id}, '${esc(q.analyte_name)} ${esc(q.lot)} ${esc(q.level)}')">L-J图</button></td></tr>`).join('');
+}
+
+async function addQCLot() {
+  await api('/api/qc/lots', {method: 'POST', body: JSON.stringify({
+    source: $('qc-source').value, analyte_id: +$('qc-analyte').value,
+    lot: $('qc-lot').value, level: $('qc-level').value,
+    mean: +$('qc-mean').value, sd: +$('qc-sd').value})});
+  loadQC();
+}
+
+async function ljChart(lotId, title) {
+  const qs = (await api('/api/qc/results?limit=500')).filter(q => q.qc_lot_id === lotId).reverse();
+  if (!qs.length) return alert('无数据');
+  const mean = qs[0].mean, sd = qs[0].sd;
+  const W = 700, H = 300, pad = 40;
+  const y = v => H - pad - ((v - (mean - 4 * sd)) / (8 * sd)) * (H - 2 * pad);
+  const x = i => pad + i * ((W - 2 * pad) / Math.max(qs.length - 1, 1));
+  let svg = `<svg width="${W}" height="${H}" style="background:#fff">`;
+  for (let k = -3; k <= 3; k++) {
+    const yy = y(mean + k * sd);
+    svg += `<line x1="${pad}" y1="${yy}" x2="${W - pad}" y2="${yy}" stroke="${k === 0 ? '#333' : (Math.abs(k) >= 2 ? '#e74c3c' : '#ddd')}" stroke-dasharray="${k ? '4 3' : ''}"/>
+      <text x="4" y="${yy + 4}" font-size="10" fill="#888">${k === 0 ? 'mean' : (k > 0 ? '+' + k + 'SD' : k + 'SD')}</text>`;
+  }
+  svg += qs.map((q, i) => `<circle cx="${x(i)}" cy="${y(q.value)}" r="4" fill="${(q.violations || []).length ? '#c0392b' : '#1a5a9e'}"><title>${q.value} z=${q.z.toFixed(2)} ${(q.violations || []).join(',')}</title></circle>`).join('');
+  svg += qs.map((q, i) => i ? `<line x1="${x(i - 1)}" y1="${y(qs[i - 1].value)}" x2="${x(i)}" y2="${y(q.value)}" stroke="#1a5a9e"/>` : '').join('');
+  svg += '</svg>';
+  $('modal-content').innerHTML = `<h3>Levey-Jennings — ${esc(title)}</h3>${svg}`;
+  $('modal').style.display = 'block';
+}
+
+// ---------- TAT ----------
+async function loadTAT() {
+  const ss = await api('/api/stats/tat');
+  $('tat-table').querySelector('tbody').innerHTML = (ss || [])
+    .sort((a, b) => a.source.localeCompare(b.source) || a.analyte_name.localeCompare(b.analyte_name))
+    .map(s => `<tr><td>${esc(s.source)}</td><td>${esc(s.analyte_name)}</td><td>${s.count}</td>
+      <td>${s.avg_minutes.toFixed(1)}</td><td>${s.p50_minutes.toFixed(1)}</td><td>${s.p90_minutes.toFixed(1)}</td><td>${s.max_minutes.toFixed(1)}</td></tr>`).join('');
+}
+
+loadMessages();
+</script>
+</body>
+</html>
